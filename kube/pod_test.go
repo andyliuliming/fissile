@@ -1022,7 +1022,7 @@ func TestPodGetEnvVarsFromConfigNonSecretHelmUserRequired(t *testing.T) {
 		t.Parallel()
 		_, err := testhelpers.RenderNode(ev, nil)
 		assert.EqualError(err,
-			`template: :7:12: executing "" at <required "SOMETHING ...>: error calling required: SOMETHING configuration missing`)
+			`template: :7:199: executing "" at <fail "SOMETHING conf...>: error calling fail: SOMETHING configuration missing`)
 	})
 
 	t.Run("Undefined", func(t *testing.T) {
@@ -1032,7 +1032,7 @@ func TestPodGetEnvVarsFromConfigNonSecretHelmUserRequired(t *testing.T) {
 		}
 		_, err := testhelpers.RenderNode(ev, config)
 		assert.EqualError(err,
-			`template: :7:12: executing "" at <required "SOMETHING ...>: error calling required: SOMETHING configuration missing`)
+			`template: :7:199: executing "" at <fail "SOMETHING conf...>: error calling fail: SOMETHING configuration missing`)
 	})
 
 	t.Run("Present", func(t *testing.T) {

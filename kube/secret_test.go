@@ -63,26 +63,31 @@ func TestMakeSecretsEmpty(t *testing.T) {
 func testCVMap() model.CVMap {
 	return model.CVMap{
 		"min": &model.ConfigurationVariable{
-			Name: "min",
+			Name:     "min",
+			Required: true,
 		},
 		"desc": &model.ConfigurationVariable{
 			Name:        "desc",
 			Description: "<<<a description>>>",
+			Required:    true,
 		},
 		"valued": &model.ConfigurationVariable{
 			Name:        "valued",
 			Description: "<<<invaluable>>>",
 			Default:     "you are very valued indeed",
+			Required:    true,
 		},
 		"const": &model.ConfigurationVariable{
 			Name:        "const",
 			Description: "<<<don't change>>>",
 			Default:     "rock solid",
+			Required:    true,
 			Immutable:   true,
 		},
 		"genie": &model.ConfigurationVariable{
 			Name:        "genie",
 			Description: "<<<here is jeannie>>>",
+			Required:    true,
 			Generator: &model.ConfigurationVariableGenerator{
 				ID:        "xxx",
 				Type:      model.GeneratorTypePassword,
@@ -93,6 +98,7 @@ func testCVMap() model.CVMap {
 			// excluded from __helm__ output
 			Name:        "guinevere",
 			Description: "<<<helm hidden>>>",
+			Required:    true,
 			Immutable:   true,
 			Generator: &model.ConfigurationVariableGenerator{
 				ID:        "xxx",
@@ -175,7 +181,7 @@ func TestMakeSecretsHelm(t *testing.T) {
 
 		_, err := testhelpers.RenderNode(secret, nil)
 		assert.EqualError(err,
-			`template: :6:12: executing "" at <required "secrets.co...>: error calling required: secrets.const has not been set`)
+			`template: :6:217: executing "" at <fail "secrets.const ...>: error calling fail: secrets.const has not been set`)
 	})
 
 	t.Run("Undefined", func(t *testing.T) {
@@ -191,7 +197,7 @@ func TestMakeSecretsHelm(t *testing.T) {
 
 		_, err := testhelpers.RenderNode(secret, config)
 		assert.EqualError(err,
-			`template: :6:12: executing "" at <required "secrets.co...>: error calling required: secrets.const has not been set`)
+			`template: :6:217: executing "" at <fail "secrets.const ...>: error calling fail: secrets.const has not been set`)
 	})
 
 	t.Run("Present", func(t *testing.T) {
