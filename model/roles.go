@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
@@ -56,7 +58,7 @@ type Configuration struct {
 		Roles    map[string]AuthRole    `yaml:"roles,omitempty"`
 		Accounts map[string]AuthAccount `yaml:"accounts,omitempty"`
 	} `yaml:"auth,omitempty"`
-	Templates map[string]string          `yaml:"templates"`
+	Templates yaml.MapSlice              `yaml:"templates"`
 	Variables ConfigurationVariableSlice `yaml:"variables"`
 }
 
@@ -171,11 +173,13 @@ func LoadRoleManifest(manifestFilePath string, releases []*Release, grapher util
 	if err := yaml.Unmarshal(manifestContents, &roleManifest); err != nil {
 		return nil, err
 	}
+
 	if roleManifest.Configuration == nil {
 		roleManifest.Configuration = &Configuration{}
 	}
+
 	if roleManifest.Configuration.Templates == nil {
-		roleManifest.Configuration.Templates = map[string]string{}
+		roleManifest.Configuration.Templates = yaml.MapSlice{}
 	}
 
 	err = roleManifest.resolveRoleManifest(releases, grapher)
@@ -313,6 +317,8 @@ func (m *RoleManifest) resolveRoleManifest(releases []*Release, grapher util.Mod
 		allErrs = append(allErrs, validateUnusedColocatedContainerRoles(m)...)
 		allErrs = append(allErrs, validateColocatedContainerPortCollisions(m)...)
 		allErrs = append(allErrs, validateColocatedContainerVolumeShares(m)...)
+		allErrs = append(allErrs, validateVariableDescriptions(m)...)
+		allErrs = append(allErrs, validateSortedTemplates(m)...)
 	}
 
 	if len(allErrs) != 0 {
@@ -480,6 +486,98 @@ func (m *RoleManifest) SelectInstanceGroups(roleNames []string) (InstanceGroups,
 	return results, nil
 }
 
+// validateVariableDescriptions tests whether all variables have descriptions
+func validateVariableDescriptions(roleManifest *RoleManifest) validation.ErrorList {
+	allErrs := validation.ErrorList{}
+
+	for _, variable := range roleManifest.Configuration.Variables {
+		if variable.Description == "" {
+			allErrs = append(allErrs, validation.Required(variable.Name,
+				"Description is required"))
+		}
+	}
+
+	return allErrs
+}
+
+// validateSortedTemplates tests that all templates are sorted in alphabetical order
+func validateSortedTemplates(roleManifest *RoleManifest) validation.ErrorList {
+	allErrs := validation.ErrorList{}
+
+	previousKey := ""
+
+	for _, templateDef := range roleManifest.Configuration.Templates {
+		key := templateDef.Key.(string)
+
+		if previousKey != "" && previousKey > key {
+			allErrs = append(allErrs, validation.Forbidden(previousKey,
+				fmt.Sprintf("Template key does not sort before '%s'", key)))
+		}
+
+		previousKey = key
+	}
+
+	return allErrs
+}
+
+// validateScripts tests that all scripts exist and that all referenced scripts exist
+func validateScripts(roleManifest *RoleManifest) validation.ErrorList {
+	allErrs := validation.ErrorList{}
+	scriptDir := filepath.Join(filepath.Dir(roleManifest.manifestFilePath), "scripts")
+	usedScripts := map[string]bool{}
+
+	for _, instanceGroup := range roleManifest.InstanceGroups {
+		for _, script := range instanceGroup.Scripts {
+			fullScriptPath := filepath.Join(scriptDir, script)
+
+			if _, err := os.Stat(fullScriptPath); err != nil {
+				allErrs = append(allErrs, validation.Invalid(
+					fmt.Sprintf("%s script", instanceGroup.Name),
+					script,
+					err.Error()))
+			}
+
+			usedScripts[fullScriptPath] = true
+		}
+
+		for _, script := range instanceGroup.EnvironScripts {
+			fullScriptPath := filepath.Join(scriptDir, script)
+
+			if _, err := os.Stat(fullScriptPath); err != nil {
+				allErrs = append(allErrs, validation.Invalid(
+					fmt.Sprintf("%s env script", instanceGroup.Name),
+					script,
+					err.Error()))
+			}
+
+			usedScripts[fullScriptPath] = true
+		}
+	}
+
+	err := filepath.Walk(scriptDir,
+		func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return err
+			}
+
+			if info.IsDir() {
+				return nil
+			}
+
+			if _, ok := usedScripts[path]; !ok {
+				allErrs = append(allErrs, validation.Forbidden(path, "Script not used."))
+			}
+
+			return nil
+		})
+
+	if err != nil {
+		allErrs = append(allErrs, validation.InternalError("scripts", err))
+	}
+
+	return allErrs
+}
+
 // validateVariableType checks that only legal values are used for
 // the type field of variables, and resolves missing information to
 // defaults. It reports all variables which are badly typed.
@@ -580,8 +678,8 @@ func validateVariableUsage(roleManifest *RoleManifest) validation.ErrorList {
 			for _, property := range jobReference.Properties {
 				propertyName := fmt.Sprintf("properties.%s", property.Name)
 
-				if template, ok := role.Configuration.Templates[propertyName]; ok {
-					varsInTemplate, err := parseTemplate(template)
+				if template, ok := getTemplate(role.Configuration.Templates, propertyName); ok {
+					varsInTemplate, err := parseTemplate(fmt.Sprintf("%v", template))
 					if err != nil {
 						// Ignore bad template, cannot have sensible
 						// variable references
@@ -607,8 +705,9 @@ func validateVariableUsage(roleManifest *RoleManifest) validation.ErrorList {
 
 	// Note, we have to ignore bad templates (no sensible variable
 	// references) and continue to check everything else.
+	for _, propertyDef := range roleManifest.Configuration.Templates {
+		template := propertyDef.Value.(string)
 
-	for _, template := range roleManifest.Configuration.Templates {
 		varsInTemplate, err := parseTemplate(template)
 		if err != nil {
 			continue
@@ -626,14 +725,13 @@ func validateVariableUsage(roleManifest *RoleManifest) validation.ErrorList {
 
 	// We have only the unused variables left in the set. Report
 	// those which are not internal.
-
 	for cv, cvar := range unusedConfigs {
 		if cvar.Internal {
 			continue
 		}
 
-		allErrs = append(allErrs, validation.NotFound("configuration.variables",
-			fmt.Sprintf("No templates using '%s'", cv)))
+		allErrs = append(allErrs, validation.NotFound(cv,
+			"Not used in any template"))
 	}
 
 	return allErrs
@@ -661,8 +759,8 @@ func validateTemplateUsage(roleManifest *RoleManifest) validation.ErrorList {
 			for _, property := range jobReference.Properties {
 				propertyName := fmt.Sprintf("properties.%s", property.Name)
 
-				if template, ok := instanceGroup.Configuration.Templates[propertyName]; ok {
-					varsInTemplate, err := parseTemplate(template)
+				if template, ok := getTemplate(instanceGroup.Configuration.Templates, propertyName); ok {
+					varsInTemplate, err := parseTemplate(fmt.Sprintf("%v", template))
 					if err != nil {
 						continue
 					}
@@ -685,14 +783,22 @@ func validateTemplateUsage(roleManifest *RoleManifest) validation.ErrorList {
 
 	// Iterate over the global templates, extract the used
 	// variables. Report all without a declaration.
+	for _, templateDef := range roleManifest.Configuration.Templates {
+		key := templateDef.Key.(string)
+		template := templateDef.Value.(string)
 
-	for _, template := range roleManifest.Configuration.Templates {
 		varsInTemplate, err := parseTemplate(template)
 		if err != nil {
 			// Ignore bad template, cannot have sensible
 			// variable references
 			continue
 		}
+
+		if len(varsInTemplate) == 0 {
+			allErrs = append(allErrs, validation.Forbidden(key,
+				"Templates used as constants are not allowed"))
+		}
+
 		for _, envVar := range varsInTemplate {
 			if _, ok := declaredConfigs[envVar]; ok {
 				continue
@@ -1063,7 +1169,10 @@ func validateNonTemplates(roleManifest *RoleManifest) validation.ErrorList {
 	// Iterate over the global templates, extract the used
 	// variables. Report all templates not using any variable.
 
-	for property, template := range roleManifest.Configuration.Templates {
+	for _, templateDef := range roleManifest.Configuration.Templates {
+		property := templateDef.Key.(string)
+		template := templateDef.Value.(string)
+
 		varsInTemplate, err := parseTemplate(template)
 		if err != nil {
 			// Ignore bad template, cannot have sensible
@@ -1294,4 +1403,14 @@ func validateColocatedContainerVolumeShares(RoleManifest *RoleManifest) validati
 	}
 
 	return allErrs
+}
+
+func getTemplate(propertyDefs yaml.MapSlice, property string) (interface{}, bool) {
+	for _, item := range propertyDefs {
+		if item.Key.(string) == property {
+			return item.Value, true
+		}
+	}
+
+	return "", false
 }
