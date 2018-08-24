@@ -25,6 +25,15 @@ type RoleManifest struct {
 	manifestFilePath string
 }
 
+// JobReference represents a job in the context of a role
+type JobReference struct {
+	*Job              `yaml:"-"`                 // The resolved job
+	Name              string                     `yaml:"name"`    // The name of the job
+	ReleaseName       string                     `yaml:"release"` // The release the job comes from
+	ExportedProviders map[string]jobProvidesInfo `yaml:"provides"`
+	ResolvedConsumers map[string]jobConsumesInfo `yaml:"consumes"`
+}
+
 // GeneratorType describes the type of generator used for the configuration value
 type GeneratorType string
 
