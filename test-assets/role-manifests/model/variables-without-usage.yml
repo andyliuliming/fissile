@@ -9,3 +9,5 @@ instance_groups:
 configuration:
   variables:
   - name: SOME_VAR # Unused
+    description: 'foo'
+

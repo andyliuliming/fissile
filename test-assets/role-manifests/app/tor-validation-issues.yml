@@ -22,11 +22,15 @@ instance_groups:
 configuration:
   variables:
   - name: BAR
+    description: "foo"
   - name: FOO
+    description: "foo"
   - name: HOME
+    description: "foo"
   - name: PELERINUL
+    description: "foo"
   templates:
+    properties.fox: '((FOO): Not specified in any release'
+    properties.tor.hashed_control_password: '((={{ }}=)){{PELERINUL}}'
     properties.tor.hostname: '((FOO))'
     properties.tor.private_key: '((#BAR))((HOME))((/BAR))'
-    properties.tor.hashed_control_password: '((={{ }}=)){{PELERINUL}}'
-    properties.fox: '((FOO): Not specified in any release'

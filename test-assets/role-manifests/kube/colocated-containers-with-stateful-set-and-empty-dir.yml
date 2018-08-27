@@ -46,4 +46,6 @@ configuration:
   variables:
   - name: ALL_VAR
     internal: true
+    description: "foo"
   - name: SOME_VAR
+    description: "foo"

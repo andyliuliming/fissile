@@ -11,10 +11,14 @@ instance_groups:
 configuration:
   variables:
   - name: BAR
+    description: "foo"
   - name: FOO
+    description: "foo"
   - name: HOME
+    description: "foo"
   - name: PELERINUL
+    description: "foo"
   templates:
+    properties.tor.hashed_control_password: '((={{ }}=)){{PELERINUL}}'
     properties.tor.hostname: '((FOO))'
     properties.tor.private_key.thing: '((#BAR))((HOME))((/BAR))'
-    properties.tor.hashed_control_password: '((={{ }}=)){{PELERINUL}}'

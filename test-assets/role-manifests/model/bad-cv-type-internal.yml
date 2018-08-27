@@ -12,5 +12,6 @@ configuration:
   - name: BAR
     type: environment
     internal: true
+    description: "foo"
   templates:
     properties.tor.hostname: '((BAR))'

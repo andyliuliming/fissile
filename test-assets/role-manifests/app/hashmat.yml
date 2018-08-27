@@ -10,6 +10,7 @@ instance_groups:
 configuration:
   variables:
   - name: FOO
+    description: "foo"
   templates:
     properties.is.a.hash.foo: '((FOO)) extend hash, ok'
     properties.its.a.hash.foo: '((FOO)) extend possible hash, ok'
