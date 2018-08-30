@@ -58,6 +58,8 @@ type Configuration struct {
 		Roles    map[string]AuthRole    `yaml:"roles,omitempty"`
 		Accounts map[string]AuthAccount `yaml:"accounts,omitempty"`
 	} `yaml:"auth,omitempty"`
+	// We need to use a MapSlice here because hashes don't preserve insert order
+	// which we need for validating alphabetical sorting of keys
 	Templates yaml.MapSlice              `yaml:"templates"`
 	Variables ConfigurationVariableSlice `yaml:"variables"`
 }
