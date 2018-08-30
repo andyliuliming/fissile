@@ -304,31 +304,3 @@ func (f *Fissile) checkEnvFileVariables(roleManifest *model.RoleManifest, defaul
 
 	return allErrs
 }
-
-// All role manifest templates must use only declared params
-func (f *Fissile) checkAllMustacheTemplatesUseDeclaredVariables() validation.ErrorList {
-	allErrs := validation.ErrorList{}
-
-	return allErrs
-}
-
-// All role manifest templates must be sorted
-func (f *Fissile) checkAllMustacheTemplatesAreSorted() validation.ErrorList {
-	allErrs := validation.ErrorList{}
-
-	return allErrs
-}
-
-// The role manifest must not contain any constants in the global section
-func (f *Fissile) checkNoConstantsInMustacheTemplates() validation.ErrorList {
-	allErrs := validation.ErrorList{}
-
-	return allErrs
-}
-
-// All of the scripts must be used
-func (f *Fissile) checkAllScriptsAreUsedInManifest() validation.ErrorList {
-	allErrs := validation.ErrorList{}
-
-	return allErrs
-}
