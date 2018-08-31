@@ -171,16 +171,8 @@ type ConfigurationVariableGenerator struct {
 	ValueType string        `yaml:"value_type"`
 }
 
-// ReleaseLoadParams describes how to load releases
-type ReleaseLoadParams struct {
-	ReleasePaths    []string
-	ReleaseNames    []string
-	ReleaseVersions []string
-	CacheDir        string
-}
-
 // LoadRoleManifest loads a yaml manifest that details how jobs get grouped into roles
-func LoadRoleManifest(manifestFilePath string, releaseLoadParams ReleaseLoadParams, grapher util.ModelGrapher) (*RoleManifest, error) {
+func LoadRoleManifest(manifestFilePath string, releasePaths, releaseNames, releaseVersions []string, boshCacheDir string, grapher util.ModelGrapher) (*RoleManifest, error) {
 	manifestContents, err := ioutil.ReadFile(manifestFilePath)
 	if err != nil {
 		return nil, err
@@ -193,10 +185,13 @@ func LoadRoleManifest(manifestFilePath string, releaseLoadParams ReleaseLoadPara
 	}
 
 	releases, err := LoadReleases(
-		releaseLoadParams.ReleasePaths,
-		releaseLoadParams.ReleaseNames,
-		releaseLoadParams.ReleaseVersions,
-		releaseLoadParams.CacheDir)
+		releasePaths,
+		releaseNames,
+		releaseVersions,
+		boshCacheDir)
+	if err != nil {
+		return nil, err
+	}
 
 	embeddedReleases, err := roleManifest.loadReleaseReferences()
 	if err != nil {
@@ -299,6 +294,7 @@ func (m *RoleManifest) loadReleaseReferences() ([]*Release, error) {
 		go func(releaseRef *ReleaseRef) {
 			defer wg.Done()
 			_, err := url.ParseRequestURI(releaseRef.Url)
+
 			if err != nil {
 				// this is a local release that we need to build/load
 				// TODO: support this
@@ -313,7 +309,6 @@ func (m *RoleManifest) loadReleaseReferences() ([]*Release, error) {
 				finalReleaseUnpackedPath := filepath.Join(
 					finalReleasesWorkDir,
 					fmt.Sprintf("%s-%s-%s", releaseRef.Name, releaseRef.Version, releaseRef.Sha1))
-
 				if _, err := os.Stat(filepath.Join(finalReleaseUnpackedPath, "release.MF")); err != nil && os.IsNotExist(err) {
 					err = os.MkdirAll(finalReleaseUnpackedPath, 0700)
 					if err != nil {
@@ -354,6 +349,8 @@ func (m *RoleManifest) loadReleaseReferences() ([]*Release, error) {
 			}
 		}(releaseRef)
 	}
+
+	wg.Wait()
 
 	// Now that all releases have been downloaded and unpacked,
 	// add them to the collection
